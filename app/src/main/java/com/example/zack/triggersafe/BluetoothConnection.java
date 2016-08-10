@@ -30,32 +30,25 @@ public class BluetoothConnection {
             "00001101-0000-1000-8000-00805F9B34FB";
     ThreadConnectBTdevice myThreadConnectBTdevice;
     ThreadConnected myThreadConnected;
-
+    private BTListener listener;
     private static final String TAG = "BLUETOOTH";
+    private String ACK;
+
 
     public BluetoothConnection(){
-//        if (!getPackageManager().hasSystemFeature(PackageManager.FEATURE_BLUETOOTH)){
-//            Toast.makeText(this, "FEATURE_BLUETOOTH NOT support", Toast.LENGTH_LONG).show();
-//            //finish();
-//            return;
-//        }
-
         //using the well-known SPP UUID
         myUUID = UUID.fromString(UUID_STRING_WELL_KNOWN_SPP);
 
         bluetoothAdapter = BluetoothAdapter.getDefaultAdapter();
-        if (bluetoothAdapter == null) {
-            //Toast.makeText(this, "Bluetooth is not supported on this hardware platform", Toast.LENGTH_LONG).show();
-            //finish();
-            return;
+        if (bluetoothAdapter != null) {
+            adapterString = bluetoothAdapter.getName() + "\n" + bluetoothAdapter.getAddress();
         }
-
-        adapterString = bluetoothAdapter.getName() + "\n" +
-                bluetoothAdapter.getAddress();
-        //textInfo.setText(stInfo);}
 }
 
-    public void setup() {
+    public int setup(BTListener newListener) {
+        if (bluetoothAdapter == null) {
+            return 0;
+        }
         Set<BluetoothDevice> pairedDevices = bluetoothAdapter.getBondedDevices();
         if (pairedDevices.size() > 0) {
             pairedDeviceArrayList = new ArrayList<BluetoothDevice>();
@@ -65,12 +58,13 @@ public class BluetoothConnection {
                 Log.d("BT_DEVICE", device.getName());
                 //nameList.add(device.getName());
                 if(device.getName().equals("TRIG_SAFE")){
-                    //Toast.makeText(MainActivity.this, "Connecting to TriggerSafe System...", Toast.LENGTH_LONG).show();
                     Log.d("BT", "Found system!------------ \n \n \n");
                     //textStatus.setText("start ThreadConnectBTdevice"); //------
                     myThreadConnectBTdevice = new ThreadConnectBTdevice(device);
                     myThreadConnectBTdevice.start();
-                    return;
+                    listener = newListener;
+                    ACK = "";
+                    return 1;
                 }
             }
 
@@ -95,10 +89,48 @@ public class BluetoothConnection {
 //                }
 //            });
         }
+        return -1;
     }
     public void cancel() {
         if(myThreadConnectBTdevice!=null){
             myThreadConnectBTdevice.cancel();
+        }
+    }
+    public int updateOfficerList(OfficerList newList){
+        sendString("?ver\n");
+        try {
+            Thread.sleep(500);                 //1000 milliseconds is one second.
+        } catch(InterruptedException ex) {
+            Thread.currentThread().interrupt();
+        }
+        if(ACK.equals(newList.toString())){
+            return 1;
+        }
+        sendString("?newList\n");
+        try {
+            Thread.sleep(500);                 //1000 milliseconds is one second.
+        } catch(InterruptedException ex) {
+            Thread.currentThread().interrupt();
+        }
+        if(ACK.equals("ready")){
+            String tagString = newList.getTagString();
+            sendString(tagString+'\n');
+            try {
+                Thread.sleep(3000);                 //1000 milliseconds is one second.
+            } catch(InterruptedException ex) {
+                Thread.currentThread().interrupt();
+            }
+            if(ACK.equals(tagString)){
+                Log.d("UPDATE", "SUCCESFUL!! \n\n\n");
+                return 1;
+            }
+        }
+        return -1;
+    }
+    public void sendString(String data){
+        if(myThreadConnected!=null){
+            byte[] bytesToSend = data.getBytes();
+            myThreadConnected.write(bytesToSend);
         }
     }
     //Called in ThreadConnectBTdevice once connect successed
@@ -206,6 +238,33 @@ public class BluetoothConnection {
         }
 
     }
+    public enum EventType{
+        DRAWN, RAISED, FIRED, ACK
+    }
+    public class BTEvent{
+        private EventType type;
+        private String message;
+        private String officerID;
+
+        public BTEvent(EventType newType, String newMsg, String oID){
+            type = newType;
+            message = newMsg;
+            officerID = oID;
+        }
+        public EventType getType(){
+            return type;
+        }
+        public String getMessage(){
+            return message;
+        }
+        public String getOfficerID(){
+            return officerID;
+        }
+    }
+    interface BTListener{
+        void btDataRecieved(BTEvent event);
+    }
+
     /*
     ThreadConnected:
     Background Thread to handle Bluetooth data communication
@@ -215,6 +274,7 @@ public class BluetoothConnection {
         private final BluetoothSocket connectedBluetoothSocket;
         private final InputStream connectedInputStream;
         private final OutputStream connectedOutputStream;
+        private String input = "";
 
         public ThreadConnected(BluetoothSocket socket) {
             connectedBluetoothSocket = socket;
@@ -243,9 +303,45 @@ public class BluetoothConnection {
             while (true) {
                 try {
                     bytes = connectedInputStream.read(buffer);
-                    String strReceived = new String(buffer, 0, bytes);
-                    Log.d("RECEIVED", strReceived );
-                    final String msgReceived = String.valueOf(bytes) + " bytes received:\n" + strReceived;
+                    if(buffer[bytes-1] == '\n') {
+                        String strReceived = new String(buffer, 0, bytes);
+                        input += strReceived;
+                        Log.d("RECEIVED", input );
+                        if(listener != null){
+                            String[] split = input.split(":");
+                            EventType type;
+                            if(split.length == 3){
+                                switch(split[0]){
+                                    case "drawn":
+                                        type = EventType.DRAWN;
+                                        listener.btDataRecieved(new BTEvent(type, split[1], split[2]));
+                                        break;
+                                    case "raised":
+                                        type = EventType.RAISED;
+                                        listener.btDataRecieved(new BTEvent(type, split[1], split[2]));
+                                        break;
+                                    case "fired":
+                                        type = EventType.FIRED;
+                                        listener.btDataRecieved(new BTEvent(type, split[1], split[2]));
+                                        break;
+                                    case "ack":
+                                        ACK = split[1];
+                                        break;
+                                    default:
+
+                                }
+
+                            }
+                           // listener.btDataRecieved(input);
+                        }
+                        input = "";
+                    }else{
+                        input += new String(buffer, 0, bytes);
+                    }
+//                    Log.d("RECEIVED", strReceived );
+                    Log.d("RECEIVED", "buffer"+ buffer.toString());
+                    Log.d("RECEIVED", "bytes" + bytes);
+                    //final String msgReceived = String.valueOf(bytes) + " bytes received:\n" + strReceived;
 
 //                    runOnUiThread(new Runnable(){
 //
