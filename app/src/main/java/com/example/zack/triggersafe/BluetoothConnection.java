@@ -304,7 +304,7 @@ public class BluetoothConnection {
                 try {
                     bytes = connectedInputStream.read(buffer);
                     if(buffer[bytes-1] == '\n') {
-                        String strReceived = new String(buffer, 0, bytes);
+                        String strReceived = new String(buffer, 0, bytes-1);
                         input += strReceived;
                         Log.d("RECEIVED", input );
                         if(listener != null){
@@ -332,7 +332,6 @@ public class BluetoothConnection {
                                 }
 
                             }
-                           // listener.btDataRecieved(input);
                         }
                         input = "";
                     }else{
@@ -341,27 +340,13 @@ public class BluetoothConnection {
 //                    Log.d("RECEIVED", strReceived );
                     Log.d("RECEIVED", "buffer"+ buffer.toString());
                     Log.d("RECEIVED", "bytes" + bytes);
-                    //final String msgReceived = String.valueOf(bytes) + " bytes received:\n" + strReceived;
 
-//                    runOnUiThread(new Runnable(){
-//
-//                        @Override
-//                        public void run() {
-//                            textStatus.setText(msgReceived);
-//                        }});
 
                 } catch (IOException e) {
                     // TODO Auto-generated catch block
                     e.printStackTrace();
 
-                    final String msgConnectionLost = "Connection lost:\n"
-                            + e.getMessage();
-//                    runOnUiThread(new Runnable(){
-//
-//                        @Override
-//                        public void run() {
-//                            textStatus.setText(msgConnectionLost);
-//                        }});
+                    final String msgConnectionLost = "Connection lost:\n" + e.getMessage();
                 }
             }
         }

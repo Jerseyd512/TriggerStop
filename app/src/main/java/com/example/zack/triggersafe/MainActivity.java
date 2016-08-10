@@ -42,15 +42,16 @@ import twitter4j.auth.AccessToken;
 public class MainActivity extends AppCompatActivity implements BluetoothConnection.BTListener, GoogleApiClient.ConnectionCallbacks, GoogleApiClient.OnConnectionFailedListener {
     //String dialog = "bluetooth available";
     private static final int REQUEST_ENABLE_BT = 1;
-    public static final String CONSUMER_KEY = "5EdbsvlOQFR5O16p8jduyKFpX ";
-    public static final String CONSUMER_SECRET = "CpED6f6dKKiKgUUWWREjELUdlPvOOPZU63M4n49VgtAfX3Fjic";
+    String CONSUMER_KEY = "QvTH9tzR7eswCxDhRuuvElKXL";
+    String CONSUMER_SECRET = "2EC438Wyfm9txbkjds6OXA3frwv8j7LBTgjfqmDOEZQgt9T9zR";
+    String ACCESS_SECRET = "JPftTKXthAXFla4gO8tHELIsKn6U0vtP8dgAZLsDboiur";
+    String ACCESS_TOKEN = "758918404715663360-OwWixpErLXj6oj6oUR3dGX3IOjUJjgI";
+    // Consumer
+    Twitter twitter;
 
-    public static final String REQUEST_URL = "http://api.twitter.com/oauth/request_token";
-    public static final String ACCESS_URL = "http://api.twitter.com/oauth/access_token";
-    public static final String AUTHORIZE_URL = "http://api.twitter.com/oauth/authorize";
+    // Access Token
+    AccessToken accessToken;
 
-    final public static String CALLBACK_SCHEME = "x-latify-oauth-twitter";
-    final public static String CALLBACK_URL = CALLBACK_SCHEME + "://callback";
     BluetoothAdapter bluetoothAdapter;
 
     //ArrayList<BluetoothDevice> pairedDeviceArrayList;
@@ -97,6 +98,16 @@ public class MainActivity extends AppCompatActivity implements BluetoothConnecti
     }
 
     public void btDataRecieved(BluetoothConnection.BTEvent event){
+        StatusUpdate update = new StatusUpdate("Officer:" + officerList.getOfficerName(event.getOfficerID())+ ": " + event.getType()+ "   " + event.getOfficerID());
+        update.setLocation(loc);
+        // Posting Status
+        Status status = null;
+        try {
+            Log.d("LOCATION", loc.toString());
+            status = twitter.updateStatus(update);
+        } catch (TwitterException e) {
+            e.printStackTrace();
+        }
         showToast(event.getType().toString() + event.getMessage());
     }
     private static final String TAG = "BLUETOOTH";
@@ -115,8 +126,13 @@ public class MainActivity extends AppCompatActivity implements BluetoothConnecti
                     .build();
         }
         StrictMode.ThreadPolicy policy = new StrictMode.ThreadPolicy.Builder().permitAll().build();
-
         StrictMode.setThreadPolicy(policy);
+
+        twitter = new TwitterFactory().getInstance();
+        twitter.setOAuthConsumer(CONSUMER_KEY, CONSUMER_SECRET);
+        accessToken = new AccessToken(ACCESS_TOKEN, ACCESS_SECRET);
+        twitter.setOAuthAccessToken(accessToken);
+
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
         Toolbar toolbar = (Toolbar) findViewById(R.id.toolbar);
@@ -132,59 +148,12 @@ public class MainActivity extends AppCompatActivity implements BluetoothConnecti
         officerList = new OfficerList(1,officers);
 
         fab = (FloatingActionButton) findViewById(R.id.fab);
-//        fab.setOnClickListener(new View.OnClickListener() {
-//            @Override
-//            public void onClick(View view) {
-//                if(myThreadConnected!=null){
-//                    byte[] bytesToSend = inputField.getText().toString().getBytes();
-//                    myThreadConnected.write(bytesToSend);
-//                }
-////                Snackbar.make(view, "Replace with your own action", Snackbar.LENGTH_LONG)
-////                    .setAction("Action", null).show();
-//        }
-//        });
         textInfo = (TextView)findViewById(R.id.info);
         textStatus = (TextView)findViewById(R.id.status);
         listViewPairedDevice = (ListView)findViewById(R.id.pairedlist);
 
         //inputPane = (LinearLayout)findViewById(R.id.inputpane);
         inputField = (EditText)findViewById(R.id.input);
-                    //btnSend = (Button)findViewById(R.id.send);
-                    //btnSend.setOnClickListener(new View.OnClickListener(){
-
-                    //            @Override
-                    //            public void onClick(View v) {
-                    //                if(myThreadConnected!=null){
-                    //                    byte[] bytesToSend = inputField.getText().toString().getBytes();
-                    //                    myThreadConnected.write(bytesToSend);
-                    //                }
-                    //            }});
-
-
-//        String CONSUMER_KEY = "QvTH9tzR7eswCxDhRuuvElKXL";
-//        String CONSUMER_SECRET = "2EC438Wyfm9txbkjds6OXA3frwv8j7LBTgjfqmDOEZQgt9T9zR";
-//        String ACCESS_SECRET = "JPftTKXthAXFla4gO8tHELIsKn6U0vtP8dgAZLsDboiur";
-//        String ACCESS_TOKEN = "758918404715663360-OwWixpErLXj6oj6oUR3dGX3IOjUJjgI";
-//
-//        // Consumer
-//        Twitter twitter = new TwitterFactory().getInstance();
-//        twitter.setOAuthConsumer(CONSUMER_KEY, CONSUMER_SECRET);
-//
-//        // Access Token
-//        AccessToken accessToken = null;
-//        accessToken = new AccessToken(ACCESS_TOKEN, ACCESS_SECRET);
-//        twitter.setOAuthAccessToken(accessToken);
-//        StatusUpdate update = new StatusUpdate("Testing Location!");
-//        update.setLocation(loc);
-//        // Posting Status
-//        Status status = null;
-//        try {
-//            status = twitter.updateStatus("Testing!");
-//        } catch (TwitterException e) {
-//            e.printStackTrace();
-//        }
-//        Log.d("TWEET","Successfully updated the status: "
-//                + status.getText());
     }
 
     @Override
@@ -216,12 +185,6 @@ public class MainActivity extends AppCompatActivity implements BluetoothConnecti
     protected void onStart() {
         super.onStart();
 
-//        //Turn ON BlueTooth if it is OFF
-//        if (!bluetoothAdapter.isEnabled()) {
-//            Intent enableIntent = new Intent(BluetoothAdapter.ACTION_REQUEST_ENABLE);
-//            startActivityForResult(enableIntent, REQUEST_ENABLE_BT);
-//        }
-
         if(BTconnection.setup(this) == -1){
             showToast("TriggerStop system not paired, please pair to device");
             Intent intentOpenBluetoothSettings = new Intent();
@@ -250,35 +213,25 @@ public class MainActivity extends AppCompatActivity implements BluetoothConnecti
                 fab.setOnClickListener(new View.OnClickListener() {
                     @Override
                     public void onClick(View view) {
-                        if(!(inputField.getText().toString().equals(""))){
-                            String CONSUMER_KEY = "QvTH9tzR7eswCxDhRuuvElKXL";
-                            String CONSUMER_SECRET = "2EC438Wyfm9txbkjds6OXA3frwv8j7LBTgjfqmDOEZQgt9T9zR";
-                            String ACCESS_SECRET = "JPftTKXthAXFla4gO8tHELIsKn6U0vtP8dgAZLsDboiur";
-                            String ACCESS_TOKEN = "758918404715663360-OwWixpErLXj6oj6oUR3dGX3IOjUJjgI";
-
-                            // Consumer
-                            Twitter twitter = new TwitterFactory().getInstance();
-                            twitter.setOAuthConsumer(CONSUMER_KEY, CONSUMER_SECRET);
-
-                            // Access Token
-                            AccessToken accessToken = null;
-                            accessToken = new AccessToken(ACCESS_TOKEN, ACCESS_SECRET);
-                            twitter.setOAuthAccessToken(accessToken);
-                            StatusUpdate update = new StatusUpdate(inputField.getText().toString());
-                            update.setLocation(loc);
-                            // Posting Status
-                            Status status = null;
-                            try {
-                                Log.d("LOCATION", loc.toString());
-                                status = twitter.updateStatus(update);
-                            } catch (TwitterException e) {
-                                e.printStackTrace();
-                            }
+                        if(inputField.getText().toString().equals("")){
+//
+//
+//                            StatusUpdate update = new StatusUpdate(inputField.getText().toString());
+//                            update.setLocation(loc);
+//                            // Posting Status
+//                            Status status = null;
+//                            try {
+//                                Log.d("LOCATION", loc.toString());
+//                                status = twitter.updateStatus(update);
+//                            } catch (TwitterException e) {
+//                                e.printStackTrace();
+//                            }
 //                            Log.d("TWEET","Successfully updated the status: "
 //                                    + status.getText());
-                            //BTconnection.updateOfficerList(officerList);
+                            BTconnection.updateOfficerList(officerList);
+                        }else {
+                            BTconnection.sendString(inputField.getText().toString());
                         }
-                        BTconnection.sendString(inputField.getText().toString());
                     }
                 });
             }

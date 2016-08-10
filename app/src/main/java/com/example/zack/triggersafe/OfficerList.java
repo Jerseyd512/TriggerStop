@@ -22,6 +22,14 @@ public class OfficerList {
     public Officer[] getOfficers(){
         return officers;
     }
+    public String getOfficerName(String id){
+        for(Officer o : officers){
+            if(o.getTagID().equals(id)){
+                return o.getName();
+            }
+        }
+        return null;
+    }
     public String getTagString(){
         String tagString = "";
         for(Officer officer: officers){
