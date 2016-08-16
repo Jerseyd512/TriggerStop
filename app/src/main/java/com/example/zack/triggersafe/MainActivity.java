@@ -19,8 +19,6 @@ import android.view.MenuItem;
 import android.view.View;
 import android.widget.Button;
 import android.widget.EditText;
-import android.widget.LinearLayout;
-import android.widget.ListView;
 import android.widget.TextView;
 import android.widget.Toast;
 
@@ -28,8 +26,8 @@ import com.google.android.gms.common.ConnectionResult;
 import com.google.android.gms.common.api.GoogleApiClient;
 import com.google.android.gms.location.LocationServices;
 
-import java.util.ArrayList;
-import java.util.List;
+import java.util.Timer;
+import java.util.TimerTask;
 
 import twitter4j.GeoLocation;
 import twitter4j.Status;
@@ -57,15 +55,19 @@ public class MainActivity extends AppCompatActivity implements BluetoothConnecti
     //ArrayList<BluetoothDevice> pairedDeviceArrayList;
     BluetoothConnection BTconnection;
     TextView textInfo, textStatus;
-    ListView listViewPairedDevice;
-    LinearLayout inputPane;
+    //ListView listViewPairedDevice;
+    //LinearLayout inputPane;
     EditText inputField;
-    Button btnSend;
+    Button btnUpdate;
     FloatingActionButton fab;
-    List<String> nameList = new ArrayList<String>();
+    //List<String> nameList = new ArrayList<String>();
     OfficerList officerList;
     GoogleApiClient mGoogleApiClient;
     GeoLocation loc;
+    private static Timer timer;
+    private static TimerTask timeout;
+    int onboardOfficerVersion;
+    boolean updateRunning;
 
     // ArrayAdapter<BluetoothDevice> pairedDeviceAdapter;
     //private UUID myUUID;
@@ -97,18 +99,93 @@ public class MainActivity extends AppCompatActivity implements BluetoothConnecti
 
     }
 
-    public void btDataRecieved(BluetoothConnection.BTEvent event){
-        StatusUpdate update = new StatusUpdate("Officer:" + officerList.getOfficerName(event.getOfficerID())+ ": " + event.getType()+ "   " + event.getOfficerID());
-        update.setLocation(loc);
-        // Posting Status
-        Status status = null;
-        try {
-            Log.d("LOCATION", loc.toString());
-            status = twitter.updateStatus(update);
-        } catch (TwitterException e) {
-            e.printStackTrace();
+    public void btDataReceived(BluetoothConnection.BTEvent event){
+        if(event.getType() == BluetoothConnection.EventType.READY){
+            if(event.getMessage().equals("1")){
+                Log.d("SYSTEM", "SYSTEM INITIALIZED CORRECTLY");
+                try {
+                    onboardOfficerVersion = Integer.valueOf(event.getOfficerID());
+                }catch(NumberFormatException n){
+
+                }
+                //textStatus.setText(Integer.toString(onboardOfficerVersion));
+                showToast("Connected to TriggerStop!");
+                if(onboardOfficerVersion < officerList.getVersionNumber()){
+                    showUpdate("A new officer List is available, the current version is: " + Integer.toString(onboardOfficerVersion) + " and the latest update is: " + Integer.toString(officerList.getVersionNumber()),1);
+                }else{
+                    showUpdate("Successfully connected to system, officer list up to date", 2);
+                }
+            }else if(event.getMessage().equals("-1")){
+                showToast("Something went wrong");
+            }
+        }else if(event.getType() == BluetoothConnection.EventType.ACK){
+            if(updateRunning){
+                Log.d("UPDATE", "still running");
+                //timeout.cancel();
+                timer.cancel();
+                timer.purge();
+            }
+            timer = new Timer();
+            updateRunning = true;
+
+            timer.schedule(new TimerTask(){
+                @Override
+                public void run() {
+                    updateRunning = false;
+                    showUpdate("A new officer List is available, the current version is: " + Integer.toString(onboardOfficerVersion) + " and the latest update is: " + Integer.toString(officerList.getVersionNumber()),1);
+                    showToast("Update timed out, please try again");
+                    // Your database code here
+                }
+            },3*1000);
+            try {
+                Thread.sleep(500);                 //1000 milliseconds is one second.
+            } catch(InterruptedException ex) {
+                Thread.currentThread().interrupt();
+            }
+            int progress = BTconnection.updateOfficerAck(event.getOfficerID());
+            if(progress == 0){
+                showUpdate("Officer list update complete!", 2);
+                timer.cancel();
+                timer.purge();
+                updateRunning = false;
+                try {
+                    Thread.sleep(1000);                 //1000 milliseconds is one second.
+                } catch(InterruptedException ex) {
+                    Thread.currentThread().interrupt();
+                }
+                hideUpdate();
+            }else if(progress == -1){
+                showUpdate("A new officer List is available, the current version is: " + Integer.toString(onboardOfficerVersion) + " and the latest update is: " + Integer.toString(officerList.getVersionNumber()),1);
+                showToast("Update failed, please try again");
+            }else{
+                showUpdate("Updating: " + Integer.toString(progress) + " of " + officerList.getCount() + " items sent!", 2);
+
+                showUpdate("Officer list update complete!", 2);
+                timer.cancel();
+                timer.purge();
+                updateRunning = false;
+                try {
+                    Thread.sleep(500);                 //1000 milliseconds is one second.
+                } catch(InterruptedException ex) {
+                    Thread.currentThread().interrupt();
+                }
+                hideUpdate();
+            }
         }
-        showToast(event.getType().toString() + event.getMessage());
+        else {
+
+            StatusUpdate update = new StatusUpdate("Officer: " + officerList.getOfficerName(event.getOfficerID()) + " : " + event.getType() + "   OfficerID: " + event.getOfficerID() + "(" + + System.currentTimeMillis()+")");
+            update.setLocation(loc);
+            // Posting Status
+            Status status = null;
+            try {
+                Log.d("LOCATION", loc.toString());
+                status = twitter.updateStatus(update);
+            } catch (TwitterException e) {
+                e.printStackTrace();
+            }
+            showToast(event.getType().toString() + event.getMessage());
+        }
     }
     private static final String TAG = "BLUETOOTH";
 
@@ -134,26 +211,28 @@ public class MainActivity extends AppCompatActivity implements BluetoothConnecti
         twitter.setOAuthAccessToken(accessToken);
 
         super.onCreate(savedInstanceState);
+
         setContentView(R.layout.activity_main);
         Toolbar toolbar = (Toolbar) findViewById(R.id.toolbar);
         setSupportActionBar(toolbar);
         BTconnection = new BluetoothConnection();
+
         Officer[] officers = new Officer[6];
-        officers[0] = new Officer("Bob", "0123");
-        officers[1] = new Officer("Bill", "0124");
-        officers[2] = new Officer("Jeb", "0125");
-        officers[3] = new Officer("Tim", "0126");
-        officers[4] = new Officer("Ryan", "0127");
-        officers[5] = new Officer("Dave", "0128");
-        officerList = new OfficerList(1,officers);
+        officers[0] = new Officer("Bob", "2208127060");
+        officers[1] = new Officer("Bill", "1774460217");
+        officers[2] = new Officer("Jeb", "1110418396");
+        officers[3] = new Officer("Tim", "1158641699");
+        officers[4] = new Officer("Ryan", "2372790555");
+        officers[5] = new Officer("Dave", "2372790555");
+        officerList = new OfficerList(2,officers);
 
         fab = (FloatingActionButton) findViewById(R.id.fab);
         textInfo = (TextView)findViewById(R.id.info);
         textStatus = (TextView)findViewById(R.id.status);
-        listViewPairedDevice = (ListView)findViewById(R.id.pairedlist);
-
+        //listViewPairedDevice = (ListView)findViewById(R.id.pairedlist);
+        btnUpdate = (Button)findViewById(R.id.update);
         //inputPane = (LinearLayout)findViewById(R.id.inputpane);
-        inputField = (EditText)findViewById(R.id.input);
+        //inputField = (EditText)findViewById(R.id.input);
     }
 
     @Override
@@ -192,7 +271,7 @@ public class MainActivity extends AppCompatActivity implements BluetoothConnecti
             startActivity(intentOpenBluetoothSettings);
         }
         mGoogleApiClient.connect();
-        makeClickable();
+        //makeClickable();
     }
 
     public void showToast(final String message)
@@ -203,6 +282,41 @@ public class MainActivity extends AppCompatActivity implements BluetoothConnecti
                 Toast.makeText(MainActivity.this, message, Toast.LENGTH_SHORT).show();
             }
         });
+    }
+    public void showUpdate(final String msg, final int mode){
+        //showToast("Current");
+        runOnUiThread(new Runnable() {
+            @Override
+            public void run() {
+                textStatus.setText(msg);
+                if(mode == 1) {
+                    btnUpdate.setVisibility(View.VISIBLE);
+                    btnUpdate.setClickable(true);
+                    btnUpdate.setOnClickListener(new View.OnClickListener() {
+                        @Override
+                        public void onClick(View view) {
+                            updateList();
+                        }
+                    });
+                }else if(mode == 2){
+                    btnUpdate.setVisibility(View.INVISIBLE);
+                    btnUpdate.setClickable(false);
+                }
+            }
+        });
+    }
+    public void hideUpdate(){
+        runOnUiThread(new Runnable() {
+            @Override
+            public void run() {
+                textStatus.setText("");
+                btnUpdate.setVisibility(View.INVISIBLE);
+                btnUpdate.setClickable(false);
+            }
+        });
+    }
+    public void updateList(){
+        BTconnection.updateOfficerList(officerList);
     }
     public void makeClickable(){
         runOnUiThread(new Runnable() {
@@ -228,9 +342,9 @@ public class MainActivity extends AppCompatActivity implements BluetoothConnecti
 //                            }
 //                            Log.d("TWEET","Successfully updated the status: "
 //                                    + status.getText());
-                            BTconnection.updateOfficerList(officerList);
+                            //BTconnection.updateOfficerList(officerList);
                         }else {
-                            BTconnection.sendString(inputField.getText().toString());
+                            //BTconnection.sendString(inputField.getText().toString());
                         }
                     }
                 });

@@ -54,17 +54,17 @@
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"/>
 
-    <ListView
-        android:id="@+id/pairedlist"
-        android:layout_width="match_parent"
-        android:layout_height="match_parent"
-        android:layout_marginTop="50dp"/>
-    <EditText
-        android:id="@+id/input"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:layout_gravity="bottom|end"
-        android:foregroundGravity="bottom" />
+    <!--<ListView-->
+        <!--android:id="@+id/pairedlist"-->
+        <!--android:layout_width="match_parent"-->
+        <!--android:layout_height="match_parent"-->
+        <!--android:layout_marginTop="50dp"/>-->
+    <!--<EditText-->
+        <!--android:id="@+id/input"-->
+        <!--android:layout_width="match_parent"-->
+        <!--android:layout_height="wrap_content"-->
+        <!--android:layout_gravity="bottom|end"-->
+        <!--android:foregroundGravity="bottom" />-->
 
     <!--<LinearLayout-->
         <!--android:id="@+id/inputpane"-->
@@ -73,22 +73,26 @@
         <!--android:orientation="vertical"-->
         <!--android:visibility="gone">-->
 
-        <!--&lt;!&ndash;<EditText&ndash;&gt;-->
-            <!--&lt;!&ndash;android:id="@+id/input"&ndash;&gt;-->
-            <!--&lt;!&ndash;android:layout_width="match_parent"&ndash;&gt;-->
-            <!--&lt;!&ndash;android:layout_height="wrap_content"&ndash;&gt;-->
-            <!--&lt;!&ndash;android:layout_gravity="bottom|end"&ndash;&gt;-->
-            <!--&lt;!&ndash;android:foregroundGravity="bottom" />&ndash;&gt;-->
-            <!--&lt;!&ndash;android:layout_margin="@dimen/fab_margin"&ndash;&gt;-->
+        <!--<EditText-->
+            <!--android:id="@+id/input"-->
+            <!--android:layout_width="match_parent"-->
+            <!--android:layout_height="wrap_content"-->
+            <!--android:layout_gravity="bottom|end"-->
+            <!--android:foregroundGravity="bottom" />-->
+            <!--android:layout_margin="@dimen/fab_margin"-->
 
-            <!--&lt;!&ndash;android:layout_marginTop="260dp"&ndash;&gt;-->
+            <!--android:layout_marginTop="260dp"-->
 
 
-        <!--&lt;!&ndash;<Button&ndash;&gt;-->
-            <!--&lt;!&ndash;android:id="@+id/send"&ndash;&gt;-->
-            <!--&lt;!&ndash;android:layout_width="match_parent"&ndash;&gt;-->
-            <!--&lt;!&ndash;android:layout_height="wrap_content"&ndash;&gt;-->
-            <!--&lt;!&ndash;android:text="Send" />&ndash;&gt;-->
+        <Button
+            android:id="@+id/update"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_gravity="bottom|end"
+            android:layout_marginBottom="100dp"
+            android:foregroundGravity="bottom"
+            android:visibility="invisible"
+            android:text="Update Tag List" />
 
     <!--</LinearLayout>-->
 

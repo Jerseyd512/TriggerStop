@@ -33,7 +33,9 @@ public class BluetoothConnection {
     private BTListener listener;
     private static final String TAG = "BLUETOOTH";
     private String ACK;
-
+    OfficerList tempList;
+    Officer[] tempOfficers;
+    int updatePosition;
 
     public BluetoothConnection(){
         //using the well-known SPP UUID
@@ -57,37 +59,17 @@ public class BluetoothConnection {
                 pairedDeviceArrayList.add(device);
                 Log.d("BT_DEVICE", device.getName());
                 //nameList.add(device.getName());
-                if(device.getName().equals("TRIG_SAFE")){
+                if (device.getName().equals("TRIG_SAFE")) {
                     Log.d("BT", "Found system!------------ \n \n \n");
                     //textStatus.setText("start ThreadConnectBTdevice"); //------
                     myThreadConnectBTdevice = new ThreadConnectBTdevice(device);
                     myThreadConnectBTdevice.start();
                     listener = newListener;
                     ACK = "";
+                    sendString("ready:");
                     return 1;
                 }
             }
-
-//            pairedDeviceAdapter = new ArrayAdapter<BluetoothDevice>(this, android.R.layout.simple_list_item_1,android.R.id.text1, pairedDeviceArrayList);
-//            ArrayAdapter<String> objectArrayAdapter = new ArrayAdapter<String>(this, android.R.layout.simple_list_item_1, android.R.id.text1, nameList);
-//            listViewPairedDevice.setAdapter(objectArrayAdapter);
-//            listViewPairedDevice.setOnItemClickListener(new AdapterView.OnItemClickListener() {
-//
-//                @Override
-//                public void onItemClick(AdapterView<?> parent, View view, int position, long id) {
-//                    BluetoothDevice device = (BluetoothDevice) pairedDeviceArrayList.get(nameList.indexOf(parent.getItemAtPosition(position)));
-//                    Toast.makeText(MainActivity.this,
-//                            "Name: " + device.getName() + "\n"
-//                                    + "Address: " + device.getAddress() + "\n"
-//                                    + "BondState: " + device.getBondState() + "\n"
-//                                    + "BluetoothClass: " + device.getBluetoothClass() + "\n"
-//                                    + "Class: " + device.getClass(),
-//                            Toast.LENGTH_LONG).show();
-//                    textStatus.setText("start ThreadConnectBTdevice"); //---------------------------------------------------------------
-//                    myThreadConnectBTdevice = new ThreadConnectBTdevice(device);
-//                    myThreadConnectBTdevice.start();
-//                }
-//            });
         }
         return -1;
     }
@@ -96,39 +78,59 @@ public class BluetoothConnection {
             myThreadConnectBTdevice.cancel();
         }
     }
-    public int updateOfficerList(OfficerList newList){
-        sendString("?ver\n");
-        try {
-            Thread.sleep(500);                 //1000 milliseconds is one second.
-        } catch(InterruptedException ex) {
-            Thread.currentThread().interrupt();
+    public void updateFailed(){
+        sendString("failed\n");
+    }
+    public int updateOfficerAck(String ack){
+        if(ack.equals("ready")){
+            sendOfficerPacket();
+            Log.d("UPDATER", "STARTED");
+            return (updatePosition + 1);
         }
-        if(ACK.equals(newList.toString())){
-            return 1;
-        }
-        sendString("?newList\n");
-        try {
-            Thread.sleep(500);                 //1000 milliseconds is one second.
-        } catch(InterruptedException ex) {
-            Thread.currentThread().interrupt();
-        }
-        if(ACK.equals("ready")){
-            String tagString = newList.getTagString();
-            sendString(tagString+'\n');
-            try {
-                Thread.sleep(3000);                 //1000 milliseconds is one second.
-            } catch(InterruptedException ex) {
-                Thread.currentThread().interrupt();
-            }
-            if(ACK.equals(tagString)){
-                Log.d("UPDATE", "SUCCESFUL!! \n\n\n");
-                return 1;
+        if(ack.equals(tempOfficers[updatePosition].getTagID())){
+            updatePosition ++;
+            if(updatePosition < tempOfficers.length) {
+                sendOfficerPacket();
+                return (updatePosition + 1);
+            }else{
+                sendString("end:");
+                return 0;
             }
         }
         return -1;
     }
-    public void sendString(String data){
-        if(myThreadConnected!=null){
+    private void sendOfficerPacket(){
+        if(updatePosition < tempOfficers.length) {
+            String out = tempOfficers[updatePosition].getTagID() + ":";
+            sendString(out);
+            Log.d("SENT",out);
+        }
+    }
+    public void updateOfficerList(OfficerList newList){
+//        sendString("?ver\n");
+//
+//        if(ACK.equals(newList.toString())){
+//            return 1;
+//        }
+        updatePosition = 0;
+        tempList = newList;
+        tempOfficers = newList.getOfficers();
+        sendString("?newList:");
+        try {
+            Thread.sleep(500);                 //1000 milliseconds is one second.
+        } catch(InterruptedException ex) {
+            Thread.currentThread().interrupt();
+        }
+        sendString(Integer.toString(newList.getVersionNumber())+":");
+        try {
+            Thread.sleep(500);                 //1000 milliseconds is one second.
+        } catch(InterruptedException ex) {
+            Thread.currentThread().interrupt();
+        }
+        sendString(Integer.toString(newList.getCount())+":");
+    }
+    public void sendString(String data) {
+        if (myThreadConnected != null) {
             byte[] bytesToSend = data.getBytes();
             myThreadConnected.write(bytesToSend);
         }
@@ -239,7 +241,7 @@ public class BluetoothConnection {
 
     }
     public enum EventType{
-        DRAWN, RAISED, FIRED, ACK
+        DRAWN, RAISED, FIRED, ACK, READY
     }
     public class BTEvent{
         private EventType type;
@@ -262,7 +264,7 @@ public class BluetoothConnection {
         }
     }
     interface BTListener{
-        void btDataRecieved(BTEvent event);
+        void btDataReceived(BTEvent event);
     }
 
     /*
@@ -297,6 +299,10 @@ public class BluetoothConnection {
         public void run() {
             byte[] buffer = new byte[1024];
             int bytes;
+            //byte[] temp = new byte[1];
+            //temp[0] = 0x10;
+           // write(temp);
+            sendString("start:");
 //            showToast("Connection Successful!");
 //            makeClickable();
 
@@ -314,18 +320,24 @@ public class BluetoothConnection {
                                 switch(split[0]){
                                     case "drawn":
                                         type = EventType.DRAWN;
-                                        listener.btDataRecieved(new BTEvent(type, split[1], split[2]));
+                                        listener.btDataReceived(new BTEvent(type, split[1], split[2]));
                                         break;
                                     case "raised":
                                         type = EventType.RAISED;
-                                        listener.btDataRecieved(new BTEvent(type, split[1], split[2]));
+                                        listener.btDataReceived(new BTEvent(type, split[1], split[2]));
                                         break;
                                     case "fired":
                                         type = EventType.FIRED;
-                                        listener.btDataRecieved(new BTEvent(type, split[1], split[2]));
+                                        listener.btDataReceived(new BTEvent(type, split[1], split[2]));
                                         break;
                                     case "ack":
-                                        ACK = split[1];
+                                        type = EventType.ACK;
+                                        listener.btDataReceived(new BTEvent(type, split[1], split[2]));
+                                        //ACK = split[1];
+                                        break;
+                                    case "ready":
+                                        type = EventType.READY;
+                                        listener.btDataReceived(new BTEvent(type, split[1], split[2]));
                                         break;
                                     default:
 
@@ -333,13 +345,15 @@ public class BluetoothConnection {
 
                             }
                         }
+
                         input = "";
                     }else{
                         input += new String(buffer, 0, bytes);
+
                     }
 //                    Log.d("RECEIVED", strReceived );
-                    Log.d("RECEIVED", "buffer"+ buffer.toString());
-                    Log.d("RECEIVED", "bytes" + bytes);
+                    //Log.d("RECEIVED", "buffer"+ buffer.toString());
+                    //Log.d("RECEIVED", "bytes" + bytes);
 
 
                 } catch (IOException e) {
